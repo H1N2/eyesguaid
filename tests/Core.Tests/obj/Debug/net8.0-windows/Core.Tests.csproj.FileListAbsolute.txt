@@ -1,0 +1,6 @@
+g:\04-code\Csharp\myEyeGuard\tests\Core.Tests\obj\Debug\net8.0-windows\Core.Tests.csproj.AssemblyReference.cache
+g:\04-code\Csharp\myEyeGuard\tests\Core.Tests\obj\Debug\net8.0-windows\Core.Tests.GeneratedMSBuildEditorConfig.editorconfig
+g:\04-code\Csharp\myEyeGuard\tests\Core.Tests\obj\Debug\net8.0-windows\Core.Tests.AssemblyInfoInputs.cache
+g:\04-code\Csharp\myEyeGuard\tests\Core.Tests\obj\Debug\net8.0-windows\Core.Tests.AssemblyInfo.cs
+g:\04-code\Csharp\myEyeGuard\tests\Core.Tests\obj\Debug\net8.0-windows\Core.Tests.csproj.CoreCompileInputs.cache
+g:\04-code\Csharp\myEyeGuard\tests\Core.Tests\bin\Debug\net8.0-windows\CoverletSourceRootsMapping
