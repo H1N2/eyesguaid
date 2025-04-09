@@ -1,6 +1,8 @@
+using Timer = System.Windows.Forms.Timer;
+
 namespace eyesGuard
 {
-    partial class RestForm
+    partial class RestForm : Form
     {
         /// <summary>
         /// Required designer variable.
@@ -13,11 +15,80 @@ namespace eyesGuard
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            try
             {
-                components.Dispose();
+                if (disposing && !isDisposing)
+                {
+                    isDisposing = true;
+
+                    // 先停止所有计时器
+                    if (restTimer != null)
+                    {
+                        restTimer.Stop();
+                    }
+                    if (animationTimer != null)
+                    {
+                        animationTimer.Stop();
+                    }
+
+                    // 解除事件绑定
+                    this.FormClosing -= OnFormClosing;
+                    this.Paint -= RestForm_Paint;
+                    this.SizeChanged -= RestForm_SizeChanged;
+                    this.Resize -= RestForm_SizeChanged;
+                    if (restTimer != null)
+                    {
+                        restTimer.Tick -= RestTimer_Tick;
+                    }
+
+                    // 释放计时器资源
+                    if (restTimer != null)
+                    {
+                        restTimer.Dispose();
+                        restTimer = null;
+                    }
+                    if (animationTimer != null)
+                    {
+                        animationTimer.Dispose();
+                        animationTimer = null;
+                    }
+
+                    // 确保解除输入锁定
+                    try
+                    {
+                        BlockInput(false);
+                    }
+                    catch
+                    {
+                        // 忽略解锁失败的错误
+                    }
+
+                    // 释放其他托管资源
+                    if (components != null)
+                    {
+                        components.Dispose();
+                        components = null;
+                    }
+
+                    // 释放字体资源
+                    if (lblTimeRemaining != null && lblTimeRemaining.Font != null)
+                    {
+                        lblTimeRemaining.Font.Dispose();
+                    }
+                    if (lblTip != null && lblTip.Font != null)
+                    {
+                        lblTip.Font.Dispose();
+                    }
+                    if (lblWorkDuration != null && lblWorkDuration.Font != null)
+                    {
+                        lblWorkDuration.Font.Dispose();
+                    }
+                }
             }
-            base.Dispose(disposing);
+            finally
+            {
+                base.Dispose(disposing);
+            }
         }
 
         #region Windows Form Designer generated code
@@ -28,76 +99,108 @@ namespace eyesGuard
         /// </summary>
         private void InitializeComponent()
         {
-            this.lblTimeRemaining = new System.Windows.Forms.Label();
-            this.lblTip = new System.Windows.Forms.Label();
-            this.progressBar = new System.Windows.Forms.ProgressBar();
-            this.SuspendLayout();
-            
+            components = new System.ComponentModel.Container();
+            lblTimeRemaining = new Label();
+            lblTip = new Label();
+            progressBar = new ProgressBar();
+            lblWorkDuration = new Label();
+            restTimer = new Timer(components);
+            animationTimer = new Timer(components);
+            SuspendLayout();
+            // 
             // lblTimeRemaining
-            this.lblTimeRemaining.Anchor = System.Windows.Forms.AnchorStyles.None;
-            this.lblTimeRemaining.AutoSize = true;
-            this.lblTimeRemaining.Font = new System.Drawing.Font("Microsoft YaHei UI", 24F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point);
-            this.lblTimeRemaining.ForeColor = System.Drawing.Color.DarkGreen;
-            this.lblTimeRemaining.Location = new System.Drawing.Point(0, 0);
-            this.lblTimeRemaining.Name = "lblTimeRemaining";
-            this.lblTimeRemaining.Size = new System.Drawing.Size(350, 40);
-            this.lblTimeRemaining.TabIndex = 0;
-            this.lblTimeRemaining.Text = "休息时间剩余: 05:00";
-            this.lblTimeRemaining.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            
-            // progressBar
-            this.progressBar.Anchor = System.Windows.Forms.AnchorStyles.None;
-            this.progressBar.Location = new System.Drawing.Point(0, 50);
-            this.progressBar.Name = "progressBar";
-            this.progressBar.Size = new System.Drawing.Size(400, 30);
-            this.progressBar.TabIndex = 2;
-            this.progressBar.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
-            
+            // 
+            lblTimeRemaining.Anchor = AnchorStyles.None;
+            lblTimeRemaining.AutoSize = true;
+            lblTimeRemaining.Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
+            lblTimeRemaining.ForeColor = Color.FromArgb(46, 125, 50);
+            lblTimeRemaining.Location = new Point(300, 227);
+            lblTimeRemaining.Name = "lblTimeRemaining";
+            lblTimeRemaining.Size = new Size(220, 30);
+            lblTimeRemaining.TabIndex = 0;
+            lblTimeRemaining.Text = "休息时间剩余: 05:00";
+            lblTimeRemaining.TextAlign = ContentAlignment.MiddleCenter;
+            // 
             // lblTip
-            this.lblTip.Anchor = System.Windows.Forms.AnchorStyles.None;
-            this.lblTip.AutoSize = true;
-            this.lblTip.Font = new System.Drawing.Font("Microsoft YaHei UI", 18F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.lblTip.ForeColor = System.Drawing.Color.DarkGreen;
-            this.lblTip.Location = new System.Drawing.Point(0, 0);
-            this.lblTip.Name = "lblTip";
-            this.lblTip.Size = new System.Drawing.Size(500, 30);
-            this.lblTip.TabIndex = 1;
-            this.lblTip.Text = "护眼小贴士";
-            this.lblTip.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            
+            // 
+            lblTip.Anchor = AnchorStyles.None;
+            lblTip.AutoSize = true;
+            lblTip.Font = new Font("Microsoft YaHei UI", 12F);
+            lblTip.ForeColor = Color.FromArgb(56, 142, 60);
+            lblTip.Location = new Point(300, 340);
+            lblTip.Name = "lblTip";
+            lblTip.Size = new Size(90, 21);
+            lblTip.TabIndex = 1;
+            lblTip.Text = "护眼小贴士";
+            lblTip.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // progressBar
+            // 
+            progressBar.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            progressBar.BackColor = Color.LightGray;
+            progressBar.ForeColor = Color.Green;
+            progressBar.Location = new Point(12, 283);
+            progressBar.Maximum = 300;
+            progressBar.Name = "progressBar";
+            progressBar.Size = new Size(800, 34);
+            progressBar.Style = ProgressBarStyle.Continuous;
+            progressBar.TabIndex = 2;
+            progressBar.Value = 300;
+            // 
+            // lblWorkDuration
+            // 
+            lblWorkDuration.AutoSize = true;
+            lblWorkDuration.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold);
+            lblWorkDuration.ForeColor = Color.FromArgb(46, 125, 50);
+            lblWorkDuration.Location = new Point(300, 185);
+            lblWorkDuration.Name = "lblWorkDuration";
+            lblWorkDuration.Size = new Size(170, 22);
+            lblWorkDuration.TabIndex = 3;
+            lblWorkDuration.Text = "已工作时长: 00:00:00";
+            lblWorkDuration.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // restTimer
+            // 
+            restTimer.Interval = 1000;
+            // 
+            // animationTimer
+            // 
+            animationTimer.Interval = 50;
+            // 
             // RestForm
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 600);
-            this.Controls.Add(this.lblTimeRemaining);
-            this.Controls.Add(this.lblTip);
-            this.Name = "RestForm";
-            this.Text = "EyesGuard - 休息时间";
-            this.Load += new System.EventHandler(this.RestForm_Load);
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            // 
+            AutoScaleDimensions = new SizeF(7F, 17F);
+            AutoScaleMode = AutoScaleMode.Font;
+            BackColor = Color.FromArgb(232, 245, 233);
+            ClientSize = new Size(800, 680);
+            Controls.Add(lblWorkDuration);
+            Controls.Add(progressBar);
+            Controls.Add(lblTimeRemaining);
+            Controls.Add(lblTip);
+            Cursor = Cursors.No;
+            DoubleBuffered = true;
+            FormBorderStyle = FormBorderStyle.None;
+            Name = "RestForm";
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "EyesGuard - 休息时间";
+            TopMost = true;
+            WindowState = FormWindowState.Maximized;
+            FormClosing += OnFormClosing;
+            Paint += RestForm_Paint;
+            ResumeLayout(false);
+            PerformLayout();
         }
 
-        private void RestForm_Load(object sender, System.EventArgs e)
-        {
-            // 在窗体加载时居中显示标签
-            CenterLabels();
-        }
-
-        private void CenterLabels()
-        {
-            // 居中显示时间标签
-            lblTimeRemaining.Left = (this.ClientSize.Width - lblTimeRemaining.Width) / 2;
-            lblTimeRemaining.Top = this.ClientSize.Height / 3;
-
-            // 居中显示提示标签
-            lblTip.Left = (this.ClientSize.Width - lblTip.Width) / 2;
-            lblTip.Top = this.ClientSize.Height / 2;
-        }
+        // 注意: 所有事件处理方法已在 RestForm.cs 中定义
 
         #endregion
 
-        private System.Windows.Forms.Label lblTimeRemaining;
-        private System.Windows.Forms.Label lblTip;
+        private Label lblTimeRemaining;
+        private Label lblTip;
+        private ProgressBar progressBar;
+        private Label lblWorkDuration;
+        private System.Windows.Forms.Timer restTimer;
+        private System.Windows.Forms.Timer animationTimer;
     }
 }

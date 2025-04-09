@@ -1,21 +1,19 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Windows.Forms;
 using System.Runtime.InteropServices;
-using Timer = System.Windows.Forms.Timer; // 明确指定使用Windows.Forms的Timer
+using System.Windows.Forms;
 
 namespace eyesGuard
 {
     public partial class RestForm : Form
     {
+        private bool isDisposing = false;
         // 导入Windows API
         [DllImport("user32.dll")]
         private static extern bool BlockInput(bool fBlockIt);
-        private Timer restTimer;
         private int remainingSeconds;
         private TimeSpan workDuration; // 新增：存储工作时长
-        private ProgressBar progressBar;
         private string[] eyeCareTips = new string[]
         {
             "请将视线移向远处，看看窗外的风景",
@@ -29,33 +27,27 @@ namespace eyesGuard
             "多喝水，保持身体和眼睛的水分充足",
             "定期进行眼部检查，预防眼部疾病"
         };
-        
+
+        private readonly int restTimeSeconds;
+
         public RestForm(int restTimeSeconds, TimeSpan workDuration)
         {
+            this.restTimeSeconds = restTimeSeconds;
+            this.workDuration = workDuration;
             InitializeComponent();
-            
-            this.workDuration = workDuration; // 保存工作时长
-            this.remainingSeconds = restTimeSeconds;
-            
-            // 设置窗体属性
-            this.FormBorderStyle = FormBorderStyle.None;
-            this.WindowState = FormWindowState.Maximized;
-            this.TopMost = true;
-            this.ShowInTaskbar = false; // 在任务栏中隐藏
-            this.Cursor = Cursors.No; // 显示禁止光标
 
-            // 初始化进度条
-            progressBar.Maximum = restTimeSeconds;
-            progressBar.Value = restTimeSeconds;
-            progressBar.ForeColor = Color.Green;
             progressBar.BackColor = Color.LightGray;
             
             // 调整控件位置
             int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
             int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
             
-            lblTimeRemaining.Location = new Point((screenWidth - lblTimeRemaining.Width) / 2, screenHeight / 3);
-            progressBar.Location = new Point((screenWidth - progressBar.Width) / 2, lblTimeRemaining.Bottom + 20);
+            // 设置进度条宽度为屏幕宽度，并放在屏幕中间位置
+            progressBar.Width = screenWidth;
+            progressBar.Location = new Point(0, screenHeight / 2);
+            
+            // 调整其他控件位置
+            lblTimeRemaining.Location = new Point((screenWidth - lblTimeRemaining.Width) / 2, progressBar.Location.Y - lblTimeRemaining.Height - 20);
             lblTip.Location = new Point((screenWidth - lblTip.Width) / 2, progressBar.Bottom + 30);
             
             // 锁定输入
@@ -71,18 +63,7 @@ namespace eyesGuard
                 // 记录错误但继续执行
                 Console.WriteLine($"无法锁定输入: {ex.Message}");
             }
-            // 设置渐变背景
-            this.Paint += (sender, e) =>
-            {
-                using (LinearGradientBrush brush = new LinearGradientBrush(
-                    this.ClientRectangle,
-                    ColorTranslator.FromHtml("#E8F5E9"),  // 浅护眼绿
-                    ColorTranslator.FromHtml("#C7EDCC"),  // 深护眼绿
-                    LinearGradientMode.Vertical))
-                {
-                    e.Graphics.FillRectangle(brush, this.ClientRectangle);
-                }
-            };
+            // 设置渐变背景 (Paint事件绑定已在Designer.cs中处理)
             this.DoubleBuffered = true; // 启用双缓冲，减少闪烁
 
             // 设置控件样式
@@ -91,28 +72,15 @@ namespace eyesGuard
             lblTip.ForeColor = ColorTranslator.FromHtml("#388E3C");
             lblTip.Font = new Font("Microsoft YaHei", 12F);
 
-            // 自定义进度条样式
-            progressBar = new ProgressBar();
-            progressBar.Size = new Size(400, 30);
-            progressBar.Style = ProgressBarStyle.Continuous;
-            this.Controls.Add(progressBar);
+            // 进度条样式已在设计器中定义
+
+            // 添加事件处理器
+            restTimer.Tick += RestTimer_Tick;
+            this.FormClosing += new FormClosingEventHandler(this.OnFormClosing);
 
             // 添加进度条动画效果
-            Timer animationTimer = new Timer();
-            animationTimer.Interval = 50; // 50毫秒更新一次
-            animationTimer.Tick += (sender, e) =>
-            {
-                if (progressBar.Value > remainingSeconds)
-                {
-                    progressBar.Value = Math.Max(remainingSeconds, progressBar.Value - 1);
-                }
-            };
+            animationTimer.Tick += AnimationTimer_Tick;
             animationTimer.Start();
-            
-            // 初始化计时器
-            restTimer = new Timer();
-            restTimer.Interval = 1000; // 1秒
-            restTimer.Tick += RestTimer_Tick;
             
             // 初始化剩余时间
             remainingSeconds = restTimeSeconds;
@@ -122,15 +90,11 @@ namespace eyesGuard
             int tipIndex = random.Next(eyeCareTips.Length);
             lblTip.Text = eyeCareTips[tipIndex];
             
-            // 添加工作时长显示
-            Label lblWorkDuration = new Label();
-            lblWorkDuration.AutoSize = true;
-            lblWorkDuration.Font = new Font("Microsoft Sans Serif", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            // 设置工作时长显示
             lblWorkDuration.Text = $"已工作时长: {workDuration.Hours:D2}:{workDuration.Minutes:D2}:{workDuration.Seconds:D2}";
             // 计算标签宽度并设置居中位置
             int labelWidth = TextRenderer.MeasureText(lblWorkDuration.Text, lblWorkDuration.Font).Width;
             lblWorkDuration.Location = new Point((screenWidth - labelWidth) / 2, 10);
-            this.Controls.Add(lblWorkDuration);
             
             // 更新时间显示
             UpdateTimeDisplay();
@@ -139,27 +103,49 @@ namespace eyesGuard
             restTimer.Start();
         }
         
-        private void RestTimer_Tick(object? sender, EventArgs e)
+        protected void AnimationTimer_Tick(object sender, EventArgs e)
+        {
+            if (progressBar.Value > remainingSeconds)
+            {
+                progressBar.Value = Math.Max(remainingSeconds, progressBar.Value - 1);
+            }
+        }
+
+        protected void RestTimer_Tick(object sender, EventArgs e)
         {
             remainingSeconds--;
             UpdateTimeDisplay();
             
             if (remainingSeconds <= 0)
             {
-                restTimer.Stop();
-                
-                // 解锁输入
                 try
                 {
-                    BlockInput(false);
+                    // 停止所有计时器
+                    if (restTimer != null)
+                    {
+                        restTimer.Stop();
+                    }
+                    if (animationTimer != null)
+                    {
+                        animationTimer.Stop();
+                    }
+
+                    // 解锁输入
+                    try
+                    {
+                        BlockInput(false);
+                    }
+                    catch
+                    {
+                        // 忽略解锁失败的错误
+                    }
                 }
-                catch
+                finally
                 {
-                    // 忽略解锁失败的错误
+                    // 关闭窗口
+                    this.Close();
                 }
-                
-                this.DialogResult = DialogResult.OK;
-                this.Close();
+
             }
         }
         
@@ -216,17 +202,72 @@ namespace eyesGuard
             }
         }
         
-        protected override void OnFormClosing(FormClosingEventArgs e)
+        protected void RestForm_SizeChanged(object sender, EventArgs e)
         {
-            // 只允许通过计时器结束来关闭窗口
-            if (remainingSeconds > 0 && e.CloseReason == CloseReason.UserClosing)
+            // 窗口大小改变时重新调整控件位置
+            int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+            int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
+
+            // 设置进度条宽度为屏幕宽度，并保持在屏幕底部
+            progressBar.Width = screenWidth;
+            progressBar.Location = new Point(0, screenHeight / 2);  // 放在屏幕中间
+
+            // 调整其他控件位置
+            lblTimeRemaining.Location = new Point((screenWidth - lblTimeRemaining.Width) / 2, progressBar.Location.Y - lblTimeRemaining.Height - 20);
+            lblTip.Location = new Point((screenWidth - lblTip.Width) / 2, progressBar.Bottom + 30);
+            
+            // 重新计算工作时长标签的位置
+            int labelWidth = TextRenderer.MeasureText(lblWorkDuration.Text, lblWorkDuration.Font).Width;
+            lblWorkDuration.Location = new Point((screenWidth - labelWidth) / 2, 10);
+
+            // 强制重绘窗体
+            this.Invalidate();
+        }
+
+        protected void RestForm_Paint(object sender, PaintEventArgs e)
+        {
+            using (LinearGradientBrush brush = new LinearGradientBrush(
+                this.ClientRectangle,
+                ColorTranslator.FromHtml("#E8F5E9"),  // 浅护眼绿
+                ColorTranslator.FromHtml("#C7EDCC"),  // 深护眼绿
+                LinearGradientMode.Vertical))
             {
-                e.Cancel = true;
-            }
-            else
-            {
-                base.OnFormClosing(e);
+                e.Graphics.FillRectangle(brush, this.ClientRectangle);
             }
         }
+
+        protected void OnFormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (!isDisposing && remainingSeconds > 0 && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            try
+            {
+                // 标记正在关闭
+                if (animationTimer != null)
+                {
+                    animationTimer.Stop();
+                }
+
+                // 确保解除输入锁定
+                try
+                {
+                    BlockInput(false);
+                }
+                catch
+                {
+                    // 忽略解锁失败的错误
+                }
+            }
+            finally
+            {
+                // 不需要调用 base.OnFormClosing，因为这是一个事件处理器而不是重写
+            }
+        }
+
+        // 注意：Dispose 方法已经在 Designer.cs 中定义，这里不再重复定义
     }
 }

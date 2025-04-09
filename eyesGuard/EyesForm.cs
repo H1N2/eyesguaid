@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using eyesGuard.Extensions;
@@ -9,14 +10,6 @@ namespace eyesGuard
 {
     public partial class EyesGuardForm : Form
     {
-        private NotifyIcon trayIcon;
-        private ContextMenuStrip trayMenu;
-        private System.Windows.Forms.Timer workTimer;
-        private CheckBox chkAutoStartWork;
-        private CheckBox chkStrictMode;
-        private CheckBox chkShowTips;
-        private CheckBox chkPlaySound;
-        private Label lblTodayWorkDuration;
 
         // 默认工作时间25分钟（1500秒）
         private Config config = Config.Load() ?? new Config();
@@ -26,26 +19,18 @@ namespace eyesGuard
         public EyesGuardForm()
         {
             InitializeComponent();
+
+            // 注册窗体事件
+            this.Resize += EyesGuardForm_Resize;
+            this.FormClosing += EyesGuardForm_FormClosing;
             InitializeTrayIcon();
             InitializeTimer();
-            InitializeNewConfigOptions();
             LoadConfig();
 
-            // 设置窗体属性和样式
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = ColorTranslator.FromHtml("#F5F5F5");
-            this.Font = new Font("Microsoft YaHei", 9F);
-
-            // 美化按钮样式
-            btnStartWork.FlatStyle = FlatStyle.Flat;
-            btnStartWork.BackColor = ColorTranslator.FromHtml("#4CAF50");
-            btnStartWork.ForeColor = Color.White;
-            btnStartWork.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
-            btnStartWork.Size = new Size(120, 35);
-            btnStartWork.Cursor = Cursors.Hand;
-            btnStartWork.Paint += (s, e) => {
+            // 初始化复选框事件
+            InitializeCheckBoxEvents();
+            btnStartWork.Paint += (s, e) =>
+            {
                 var btn = (Button)s;
                 using (var path = new System.Drawing.Drawing2D.GraphicsPath())
                 {
@@ -54,26 +39,13 @@ namespace eyesGuard
                 }
             };
 
-            // 美化数值输入控件
-            foreach (NumericUpDown num in new[] { numWorkMinutes, numRestMinutes })
-            {
-                num.BorderStyle = BorderStyle.FixedSingle;
-                num.Font = new Font("Microsoft YaHei", 10F);
-                num.Size = new Size(80, 25);
-            }
 
             // 初始化UI控件事件
             btnStartWork.Click += BtnStartWork_Click;
             numWorkMinutes.Value = config.WorkMinutes;
             numRestMinutes.Value = config.RestMinutes;
 
-            // 添加自启动选项到托盘菜单
-            ToolStripMenuItem autoStartItem = new ToolStripMenuItem("开机自启动");
-            autoStartItem.CheckOnClick = true;
-            autoStartItem.Checked = config.AutoStart;
-            autoStartItem.Click += AutoStartItem_Click;
-            trayMenu.Items.Insert(1, autoStartItem);
-            trayMenu.Items.Insert(2, new ToolStripSeparator());
+            // 自启动选项已在 InitializeTrayIcon() 方法中添加
 
             // 添加数值改变事件
             numWorkMinutes.ValueChanged += NumMinutes_ValueChanged;
@@ -84,13 +56,7 @@ namespace eyesGuard
             UpdateTrayText();
 
             // 初始化今日工作时长显示
-            lblTodayWorkDuration = new Label();
-            lblTodayWorkDuration.AutoSize = true;
-            lblTodayWorkDuration.Font = new Font("Microsoft YaHei", 12F);
-            lblTodayWorkDuration.ForeColor = ColorTranslator.FromHtml("#424242");
-            lblTodayWorkDuration.Location = new Point(120, 340);
             lblTodayWorkDuration.Text = "今日工作时长：00:00:00";
-            this.Controls.Add(lblTodayWorkDuration);
         }
 
         private void LoadConfig()
@@ -111,44 +77,13 @@ namespace eyesGuard
             chkPlaySound.Checked = config.PlaySound;
         }
 
-        private void InitializeNewConfigOptions()
+        // 设置选项的CheckedChanged事件处理
+        private void InitializeCheckBoxEvents()
         {
-            // 创建选项分组面板
-            GroupBox optionsGroup = new GroupBox();
-            optionsGroup.Text = "设置选项";
-            optionsGroup.Font = new Font("Microsoft YaHei", 9F, FontStyle.Bold);
-            optionsGroup.Size = new Size(360, 180);
-            optionsGroup.Location = new Point(20, 150);
-            optionsGroup.BackColor = Color.White;
-            this.Controls.Add(optionsGroup);
-
-            // 自动开始工作
-            chkAutoStartWork = CreateStyledCheckBox("启动程序后自动开始计时", new Point(15, 30));
-            optionsGroup.Controls.Add(chkAutoStartWork);
-
-            // 严格模式
-            chkStrictMode = CreateStyledCheckBox("严格模式（锁定输入设备）", new Point(15, 60));
-            optionsGroup.Controls.Add(chkStrictMode);
-
-            // 显示护眼小贴士
-            chkShowTips = CreateStyledCheckBox("显示护眼小贴士", new Point(15, 90));
-            optionsGroup.Controls.Add(chkShowTips);
-
-            // 休息提醒声音
-            chkPlaySound = CreateStyledCheckBox("休息提醒声音", new Point(15, 120));
-            optionsGroup.Controls.Add(chkPlaySound);
-        }
-
-        private CheckBox CreateStyledCheckBox(string text, Point location)
-        {
-            CheckBox checkBox = new CheckBox();
-            checkBox.Text = text;
-            checkBox.AutoSize = true;
-            checkBox.Location = location;
-            checkBox.Font = new Font("Microsoft YaHei", 9F);
-            checkBox.ForeColor = ColorTranslator.FromHtml("#424242");
-            checkBox.CheckedChanged += NewConfigOption_CheckedChanged;
-            return checkBox;
+            chkAutoStartWork.CheckedChanged += NewConfigOption_CheckedChanged;
+            chkStrictMode.CheckedChanged += NewConfigOption_CheckedChanged;
+            chkShowTips.CheckedChanged += NewConfigOption_CheckedChanged;
+            chkPlaySound.CheckedChanged += NewConfigOption_CheckedChanged;
         }
 
         private void NewConfigOption_CheckedChanged(object sender, EventArgs e)
@@ -158,25 +93,56 @@ namespace eyesGuard
 
         private void InitializeTimer()
         {
-            workTimer = new System.Windows.Forms.Timer();
             workTimer.Interval = 1000; // 1秒
             workTimer.Tick += WorkTimer_Tick;
         }
 
         private void InitializeTrayIcon()
         {
-            trayMenu = new ContextMenuStrip();
-            trayMenu.Items.Add("设置", null, OnSettings);
-            trayMenu.Items.Add("马上休息", null, OnRestNow);
-            trayMenu.Items.Add("-"); // 分隔线
-            trayMenu.Items.Add("退出", null, OnExit);
+            // 设置托盘图标
+            try
+            {
+                // 尝试从资源加载图标
+                string iconPath = "eye_ico.ico";
+                if (File.Exists(iconPath))
+                {
+                    trayIcon.Icon = new Icon(iconPath);
+                }
+                else
+                {
+                    // 如果找不到图标文件，使用应用程序默认图标
+                    trayIcon.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                }
+            }
+            catch (Exception)
+            {
+                // 如果加载图标失败，使用应用程序默认图标
+                trayIcon.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            }
 
-            trayIcon = new NotifyIcon();
-            trayIcon.Text = "EyesGuard - 准备开始";
-            trayIcon.Icon = new Icon(SystemIcons.Application, 40, 40);
+            // 初始化托盘菜单
             trayIcon.ContextMenuStrip = trayMenu;
             trayIcon.Visible = true;
             trayIcon.DoubleClick += TrayIcon_DoubleClick;
+
+            // 先清空菜单项
+            trayMenu.Items.Clear();
+
+            // 添加基本菜单项
+            trayMenu.Items.Add("设置", null, OnSettings);
+            trayMenu.Items.Add("立即休息", null, OnRestNow);
+            trayMenu.Items.Add(new ToolStripSeparator());
+            trayMenu.Items.Add("退出", null, OnExit);
+
+            // 添加自启动选项到托盘菜单
+            ToolStripMenuItem autoStartItem = new ToolStripMenuItem("开机自启动");
+            autoStartItem.CheckOnClick = true;
+            autoStartItem.Checked = config.AutoStart;
+            autoStartItem.Click += AutoStartItem_Click;
+
+            // 在第二个位置插入（索引为1）
+            trayMenu.Items.Insert(1, autoStartItem);
+            trayMenu.Items.Insert(2, new ToolStripSeparator());
         }
 
         private void WorkTimer_Tick(object? sender, EventArgs e)
@@ -202,15 +168,15 @@ namespace eyesGuard
         {
             int minutes = remainingSeconds / 60;
             int seconds = remainingSeconds % 60;
-            
+
             // 计算当前工作持续时间
             TimeSpan currentWorkDuration = DateTime.Now - workStartTime;
             int workMinutes = (int)currentWorkDuration.TotalMinutes;
-            
+
             // 格式化今日工作时长
             TimeSpan todayDuration = config.TodayWorkDuration;
             string todayWorkHours = $"{todayDuration.TotalHours:F1}";
-            
+
             // 更新托盘提示文本
             trayIcon.Text = $"你已经持续工作了{workMinutes}分钟，\n还有{minutes:00}分钟{seconds:00}秒电脑就会被锁定，\n今天已经持续工作{todayWorkHours}小时";
             lblTimeRemaining.Text = $"剩余时间：{minutes:00}:{seconds:00}";
@@ -254,23 +220,15 @@ namespace eyesGuard
             using (RestForm restForm = new RestForm(restTimeSeconds, workDuration))
             {
                 this.Hide();
-                if (restForm.ShowDialog() == DialogResult.OK)
-                {
-                    // 休息结束，重新开始工作
-                    remainingSeconds = (int)numWorkMinutes.Value * 60;
-                    workStartTime = DateTime.Now; // 重新记录工作开始时间
-                    workTimer.Start();
-                    UpdateTrayText();
-                }
+                restForm.ShowDialog();
             }
-            this.Show();
         }
 
         private void TrayIcon_DoubleClick(object? sender, EventArgs e)
         {
             this.Show();
-this.WindowState = FormWindowState.Normal;
-this.Activate();
+            this.WindowState = FormWindowState.Normal;
+            this.Activate();
         }
 
         private void OnSettings(object? sender, EventArgs e)
@@ -375,16 +333,32 @@ this.Activate();
             }
         }
 
-        private void OnFormClosing(object sender, FormClosingEventArgs e)
+        private void EyesGuardForm_Resize(object sender, EventArgs e)
+        {
+            if (this.WindowState == FormWindowState.Minimized)
+            {
+                this.Hide();
+                trayIcon.ShowBalloonTip(3000, "EyesGuard", "程序已最小化到系统托盘", ToolTipIcon.Info);
+            }
+        }
+
+        private void EyesGuardForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (e.CloseReason == CloseReason.UserClosing)
             {
-                e.Cancel = true;
-                this.Hide();
+                e.Cancel = true;  // 取消关闭操作
+                this.Hide();      // 隐藏窗体
+                trayIcon.ShowBalloonTip(3000, "EyesGuard", "程序已最小化到系统托盘", ToolTipIcon.Info);
             }
             else
             {
-                trayIcon.Visible = false;
+                // 如果是应用程序退出，保存配置并清理资源
+                config.Save();
+                if (trayIcon != null)
+                {
+                    trayIcon.Visible = false;
+                    trayIcon.Dispose();
+                }
             }
         }
     }
